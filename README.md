@@ -5,23 +5,27 @@
 * [Preparation](#preparation)
 * [Slack](#slack)
 * [Party](#party)
-* [More](#more)
+* [Cleanup](#cleanup)
+* [More?](#more)
 
 # Introduction
 
-* AWS GuardDuty(이하 GD)?
-  - VPC 흐름 로그, DNS 로그, CloudTrail 이벤트
-  - 쉽게 통합
-
+* AWS GuardDuty?
+  - 트래픽/성능에 영향을 주지 않는다!(VPC 흐름 로그, DNS 로그, CloudTrail 이벤트 사용)
+  - 정말 손쉽게 통합 가능
+  - 네트워크 이슈 이외의 AWS 내의 계정 부정 사용 등의 경우도 검출!(한다고 한다)
+  
 # Preparation
 
 ![Structure](guardduty.png)
 
-6 번은 제외
+6 번은 즉 공격 확인 후 선차단 조치 등을 할 수도 있다는 것이나, 본 실습에서는 제외함
 
-## Lab 구성
+> 현재, 서울 리전에 문제인지, `lambda` 를 제대로 지원이 안되는 증상(node8.10 런타임에는 CFN으로는 .zip 파일로 올리지 못하는?!)이 있으므로 싱가폴(ap-southeast-1)을 사용하기로 한다.
 
-  - `EC2` 에서 [Key Pairs](https://console.aws.amazon.com/ec2/v2/home)에서 `Create Key Pair`를 통해 키쌍의 이름은 `gangnam`으로 정하고 다운로드 받습니다.
+## GuardDuty Lab 구성
+
+  - `EC2` 에서 [Key Pairs](https://console.aws.amazon.com/ec2/v2/home?#KeyPairs)에서 `Create Key Pair`를 통해 키쌍의 이름은 `gangnam`으로 정하고 다운로드 받습니다.
 
   - [Demo CFN template](https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/guardduty-tester.template) 이 파일을 다운로드 받고, `guardduty-tester.template` 로 저장합니다.
 
@@ -69,6 +73,7 @@
     - `Choose a template` 에서 `Upload a template to Amazon S3`를 체크 후 방금 다운로드 받은 `gd2slack.template` 을 선택하고, `Next`를 합니다.
 
   - Specify Details
+    - `Stack Name` 은 `gangnam-GuardDutyNotifier`로
     - `Slack Incoming Web Hook URL` 은 방금 복사했던, `Webhook URL`을 입력합니다.
     - `Slack channel to send findings to` 는 `#guardduty`이겠지요?
     - `Minimum severity level (LOW, MED, HIGH)` 은 그냥 `LOW` 로 둡니다.
@@ -87,15 +92,43 @@
 
 * 둘다 `CREATE_COMPLETE`이 될 떄까지 기다립니다.
 
-* 이제 `Compromised Instance`에 접속해서, `./guardduty-tester1.sh` 을 실행해볼까요?
+* [GuardDuty Console](https://console.aws.amazon.com/guardduty/home)에서 `Get Started` 클릭 후 `Enable GuardDury` 를 클릭합니다.
+
+  혹은 CLI 로도 가능합니다.
+  ```bash
+  aws guardduty create-detector
+  {  
+     "detectorId":"0cb28c226a8658f5357cf0ff794a22f5"
+  }
+  ```
+
+* 이제 공격자가 되어 Bastion(`Malicious Instance`)에 접속해서, `Compromised Instance` 으로 접속 후에 `./guardduty-tester1.sh` 을 실행해볼까요?
+  
+  접속 서버 정보는 [Cloudformation Console](https://console.aws.amazon.com/cloudformation/home)에서 `GuardDuty Lab 구성` 곧 ` gangnam-GuardDutyTest` 의 `Output` 값을 보면 알 수 있습니다.
+
+  Key       |Value        |Description
+  :-        |:-           |:-
+  RedTeamIp |172.16.0.27  |Local IP for RedTeam Instance 	
+  BastionIp |54.180.17.245|Elastic IP for Bastion
+
+  접속은 아래를 참조해서 합시다.
   - Putty 는 https://docs.aws.amazon.com/ko_kr/AWSEC2/latest/UserGuide/putty.html
   - Mac/Linux 는 https://docs.aws.amazon.com/ko_kr/AWSEC2/latest/UserGuide/AccessingInstancesLinux.html
 
-* 이렇게 10 분정도 지나면...
+* 접속 준비를 끝났어도, 로그는 안 쌓여 있을 수 있다. 10분 정도는 기다리자.
 
-* [Guardduty Console](https://console.aws.amazon.com/guardduty/home)에 들어가 보시면 혹은 Slack 으로 이미 여러 메시지가 와 있을 것입니다.
+* 이렇게 10 분정도 지나면, [Free trial](https://console.aws.amazon.com/guardduty/?#/free-trial)에서 대략 처리한 로그량을 알 수 있다.
 
-* 한번 살펴 볼까요?
+  종류            |용량
+  :-              |:-
+  CloudTrail logs |9.3 k events
+  VPC Flow logs   |3.47 MB
+  DNS logs        |2.96 MB
+
+
+* 이런식으로 되었다면, [Guardduty Console](https://console.aws.amazon.com/guardduty/home)에 들어가 보시면 혹은 `Slack` 으로 이미 여러 메시지가 와 있을 것입니다.
+
+* 실제 데이터를 살펴 볼까요?
     ```json
     {
         "Resource": {
@@ -195,34 +228,50 @@
     }
     ```
 
-* 수행하는 공격들?
-    1) UnauthorizedAccess:EC2/SSHBruteForce
-    EC2 인스턴스가 SSH 무차별 암호 대입 공격에 관여
-    이 조사 결과는 AWS 환경의 EC2인스턴스가 Linux 기반 시스템의 SSH 서비스에 대한 암호를 얻기 위한 목적으로 행해진 무차별 암호 대입 공격에 관여했을을 알려 줍니다.
+* 수행하는 공격들은 어떤 것 들인가?
+    1) [UnauthorizedAccess:EC2/SSHBruteForce](https://docs.aws.amazon.com/ko_kr/guardduty/latest/ug/guardduty_finding-types.html#unauthorized9)
+    EC2 인스턴스가 SSH 무차별 암호 대입 공격에 관여했습니다.
     
-    2) UnauthorizedAccess:EC2/RDPBruteForce
+    2) [UnauthorizedAccess:EC2/RDPBruteForce](https://docs.aws.amazon.com/ko_kr/guardduty/latest/ug/guardduty_finding-types.html#unauthorized10)
     EC2 인스턴스가 RDP 무차별 암호 대입 공격에 관여했습니다.
-    이 조사 결과는 AWS 환경의 EC2 인스턴스가 Windows 기반 시스템의 RDP 서비스에 대한 암호를 얻기 위한 목적으로 행해진 무차별 암호 대입 공격에 관여했음을 알려 줍니다. 이는 AWS 리소스에 대한 무단 액세스를 나타낼 수 있습니다.
     
-    3) CryptoCurrency:EC2/BitcoinTool.B!DNS
-    EC2 인스턴스가 비트코인 마이닝 풀과 통신
-    이 조사 결과는 AWS 환경의 EC2 인스턴스가 비트코인 마이닝 풀과 통신함을 알려 줍니다. 암호 화폐 마이닝 분야에서 마이닝 도구는 블록 해결에 기여한 작업량에 따라 보상을 분할하기 위해 네트워크를 통해 처리 능력을 공유하는 마이너별 리소스 풀링입니다.
+    3) [CryptoCurrency:EC2/BitcoinTool.B!DNS](https://docs.aws.amazon.com/ko_kr/guardduty/latest/ug/guardduty_finding-types.html#crypto3)
+    EC2 인스턴스가 비트코인 관련 활동과 연결된 도메인 이름을 쿼리하는 중입니다.
     
-    4) Trojan:EC2/DNSDataExfiltration
-    EC2 인스턴스가 DNS 쿼리를 통해 데이터를 유출
-    이 조사 결과는 AWS 환경에 아웃바운드 데이터 전송에 DNS 쿼리를 사용하는 맬웨어가 있는 EC2 인스턴스가 있음을 알려 줍니다. 그 결과, 데이터가 유출됩니다. 이 EC2 인스턴스는 손상되었을 수 있습니다. DNS 트래픽은 일반적으로 방화벽으로 차단되지 않습니다. 예를 들어, 손상된 EC2 인스턴스에 있는 맬웨어는 데이터(예: 신용카드 번호)를 DNS 쿼리로 인코딩해 공격자가 제어하는 원격 DNS 서버로 전송할 수 있습니다.
-    
-    5) UnauthorizedAccess:EC2/MaliciousIPCaller.Custom
-    사용자 지정 위협 목록의 IP 주소에서 호출
-    이 조사 결과는 업로드한 위협 목록에 포함된 IP 주소에서 API 작업(예: EC2 인스턴스를 시작, 새 IAM 사용자를 생성 또는 AWS 권한을 수정하려는 시도 등)이 호출되었음을 알려 줍니다. In GuardDuty에서 위협 목록은 알려진 악성 IP 주소로 이루어져 있습니다. GuardDuty는 업로드된 위협 목록을 기준으로 결과를 작성합니다. 이는 공격자의 실제 신원을 숨기려는 의도를 갖고 AWS 리소스에 무단으로 액세스하려 함을 나타낼 수 있습니다.
+    4) [Trojan:EC2/DNSDataExfiltration](https://docs.aws.amazon.com/ko_kr/guardduty/latest/ug/guardduty_finding-types.html#trojan10)
+    EC2 인스턴스가 DNS 쿼리를 통해 데이터를 유출시키고 있습니다.
 
+    5) [Recon:EC2/Portscan](https://docs.aws.amazon.com/ko_kr/guardduty/latest/ug/guardduty_finding-types.html#recon5)
+    EC2 인스턴스가 원격 호스트에 대한 아웃바운드 포트 스캔을 수행하고 있습니다.
+
+    6) [Backdoor:EC2/C&CActivity.B!DNS](https://docs.aws.amazon.com/ko_kr/guardduty/latest/ug/guardduty_finding-types.html#backdoor7)
+    EC2 인스턴스가 알려진 명령 및 제어 서버와 연결된 도메인 이름을 쿼리하는 중입니다.
+
+* `GuardDuty`도 머신러닝 기반이라, `Feedback` 을 성실하게 주면 결과도 잘 나올듯 하다(참고).
+
+# Cleanup
+
+  - [GuardDuty Console](https://console.aws.amazon.com/guardduty/home?#/settings)의 `Settings`에서 `Disable GuardDuty` 체크 후 `Save settings` 를 클릭. 주의 메시지가 나오면 `Disable` 클릭
+
+  - [Cloudformation Console](https://console.aws.amazon.com/cloudformation/home)  로 갑니다.
+  
+    - `gangnam-GuardDutyTest`에 체크하시고, `Action` 버튼에서 `Delete Stack` 버튼 클릭
+
+    - `gangnam-GuardDutyNotifier`에 체크하시고, `Action` 버튼에서 `Delete Stack` 버튼 클릭
+
+  - `EC2` 의 [Key Pairs](https://console.aws.amazon.com/ec2/v2/home?#KeyPairs)에서 `gangnam` 를 체크하시고, `Delete` 버튼 클릭
+
+  - `IAM` 의 `Roles` 에서 `AWSServiceRoleForAmazonGuardDuty` 체크 후 `Delete Role` 버튼 클릭
 
 # More?
+
+ Q. 적용 이전에 로그들도 분석하나?
+ - 실험적으로 그렇지는 않다. 다만, 시작한 시점의 로그는 최대 90일간은 모두 분석하는 듯 하다? 답은 AWS에...
 
  Q. 멀티 계정은 어떻게?
  - https://github.com/aws-samples/amazon-guardduty-multiaccount-scripts
 
- Q. 너무 자주 와요? 
+ Q. 너무 알람이 자주 와요? 
  - cloudwatch 에서 severity 를 조절하거나 filter 에서 archiving 하도록 처리하세요.
 
  Q. 초기 대응도 자동으로 하고 싶어요?
@@ -237,8 +286,10 @@
  - 여러 서드파티들을 대동해서...
 
  Q. 넘 느리지 않나요?
- - 오진보단...
+ - 오진(false positive) 보단 낫지 않을까 싶군요.
+
+ Q. 추가 필터는 어떻게 공급받을까요?
+ - 파트너 사에 물어봐야 할 듯. 답은 AWS에게...
 
  Q. 시각화는 어떻게?
- - geometry 정보도 있고, 시각화 할 수 있는 정보가 많이 있으니 `Glue` 와 `ELK` 혹은 `QuickSight` 를 적절히 사용하시면 되겠습니다~
-
+ - 위치 정보도 있고, 시각화 할 수 있는 정보가 많으니 `ELK` 혹은 `QuickSight` 를 적절히 사용하시면 되겠습니다~
