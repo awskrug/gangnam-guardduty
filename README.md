@@ -13,15 +13,16 @@
 * AWS GuardDuty?
   - 트래픽/성능에 영향을 주지 않는다!(VPC 흐름 로그, DNS 로그, CloudTrail 이벤트 사용)
   - 정말 손쉽게 통합 가능
+  - 프로그래밍적으로 다양하게 커스터마이징 가능
   - 네트워크 이슈 이외의 AWS 내의 계정 부정 사용 등의 경우도 검출!(한다고 한다)
   
 # Preparation
 
 ![Structure](guardduty.png)
 
-6 번은 즉 공격 확인 후 선차단 조치 등을 할 수도 있다는 것이나, 본 실습에서는 제외함
+위에 그림에서 화살표 6 번은 즉 공격 확인 후 선차단 조치 등을 할 수도 있다는 것이나, 본 실습에서는 제외합니다. [More](#more)의 내용을 살펴보시면, 매우 쉽게 구성하실 수 있습니다.
 
-> 현재, 서울 리전에 문제인지, `lambda` 를 제대로 지원이 안되는 증상(node8.10 런타임에는 CFN으로는 .zip 파일로 올리지 못하는?!)이 있으므로 싱가폴(ap-southeast-1)을 사용하기로 한다.
+> 현재, 서울 리전에 문제인지, `lambda` 를 제대로 지원이 안되는 증상(node8.10 런타임에는 CFN으로는 .zip 파일로 올리지 못하는?!)이 있으므로 싱가폴(ap-southeast-1)을 사용하기로 합니다.
 
 ## GuardDuty Lab 구성
 
@@ -274,10 +275,16 @@
  Q. 너무 알람이 자주 와요? 
  - cloudwatch 에서 severity 를 조절하거나 filter 에서 archiving 하도록 처리하세요.
 
+ Q. 알렉사(Alexa)를 이용한 조회도 가능한가요?
+ - 당연히 가능합니다. 
+   원문: https://github.com/aws-samples/amazon-guardduty-alexa-sample
+   번역본: https://cloud.hosting.kr/techblog_180420_amazon_alexa_to_get_amazon_guardduty/
+
  Q. 초기 대응도 자동으로 하고 싶어요?
- - 서드 파티 솔루션도 많고
- - https://github.com/dpigliavento/aws-support-tools/tree/master/GuardDuty
- - http://woowabros.github.io/security/2018/02/23/aws-auto-security1.html
+ - 서드 파티 솔루션도 많고, 보통 응용은 `CloudWatch Event`를 기반으로 하여, 차단할 수 있습니다. 아래를 참조하시면 되겠습니다.
+    - 자동 차단(공격자 IP를 DynamoDB 에 저장하여 화이트 리스트 관리): https://github.com/aws-samples/amazon-guardduty-waf-acl
+    - 자동 차단(심각도 8.0 이상이면 차단하는 예): https://github.com/dpigliavento/aws-support-tools/tree/master/GuardDuty
+    - 자동 차단 & 관리: http://woowabros.github.io/security/2018/02/23/aws-auto-security1.html
 
  Q. 공격 당한 후에는 어떻게?
  - [Amazon EC2 모범 사례](https://docs.aws.amazon.com/ko_kr/AWSEC2/latest/UserGuide/ec2-best-practices.html)를 참고하세요.
