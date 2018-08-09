@@ -1,5 +1,7 @@
 # AWS Guardduty Introuduction
 
+by @mosesyoon at awskrug.slack.com
+
 ## Index
 
 * [Preparation](#preparation)
@@ -277,8 +279,8 @@
 
  Q. 알렉사(Alexa)를 이용한 조회도 가능한가요?
  - 당연히 가능합니다. 
-   원문: https://github.com/aws-samples/amazon-guardduty-alexa-sample
-   번역본: https://cloud.hosting.kr/techblog_180420_amazon_alexa_to_get_amazon_guardduty/
+   - 원문: https://github.com/aws-samples/amazon-guardduty-alexa-sample
+   - 번역본: https://cloud.hosting.kr/techblog_180420_amazon_alexa_to_get_amazon_guardduty/
 
  Q. 초기 대응도 자동으로 하고 싶어요?
  - 서드 파티 솔루션도 많고, 보통 응용은 `CloudWatch Event`를 기반으로 하여, 차단할 수 있습니다. 아래를 참조하시면 되겠습니다.
